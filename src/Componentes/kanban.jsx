@@ -5,6 +5,7 @@ import styles from './TarefaItem.module.css';
 export default function Kanban({
   tarefas = [],
   adicionarDesabilitado = false,
+  usuarioId,
   onAdicionar,
   onDeletar,
   onConcluir,
@@ -52,8 +53,8 @@ export default function Kanban({
   return (
     <section className={styles.kanbanSection}>
       <div className={styles.kanbanHeader}>
-        <h2>Minhas tarefas</h2>
-        <p>Organize suas atividades por etapa.</p>
+        <h2>Tarefas dos projetos</h2>
+        <p>Tarefas de outras contas ficam disponíveis apenas para leitura.</p>
         <button
           type="button"
           className={styles.actionButton}
@@ -103,6 +104,7 @@ export default function Kanban({
                     <TarefaItem
                       key={tarefa.id}
                       {...tarefa}
+                      somenteLeitura={Number(tarefa.usuarioId) !== Number(usuarioId)}
                       status={obterStatus(tarefa)}
                       deletando={tarefa.id === tarefaSendoRemovida}
                       arrastando={tarefa.id === tarefaArrastada}
@@ -111,11 +113,25 @@ export default function Kanban({
                         setTarefaArrastada(null);
                         setColunaAlvo(null);
                       }}
-                      onEditar={() => onEditar(tarefa)}
-                      onDeletar={() => onDeletar(tarefa.id)}
-                      onConcluir={() => onConcluir(tarefa.id)}
-                      onStatusChange={(status) => onConcluir(tarefa.id, status)}
-                      onExclusaoAnimada={() => onExclusaoAnimada(tarefa.id)}
+                      onEditar={() => {
+                        if (Number(tarefa.usuarioId) === Number(usuarioId)) onEditar(tarefa);
+                      }}
+                      onDeletar={() => {
+                        if (Number(tarefa.usuarioId) === Number(usuarioId)) onDeletar(tarefa.id);
+                      }}
+                      onConcluir={() => {
+                        if (Number(tarefa.usuarioId) === Number(usuarioId)) onConcluir(tarefa.id);
+                      }}
+                      onStatusChange={(status) => {
+                        if (Number(tarefa.usuarioId) === Number(usuarioId)) {
+                          onConcluir(tarefa.id, status);
+                        }
+                      }}
+                      onExclusaoAnimada={() => {
+                        if (Number(tarefa.usuarioId) === Number(usuarioId)) {
+                          onExclusaoAnimada(tarefa.id);
+                        }
+                      }}
                     />
                   ))
                 )}

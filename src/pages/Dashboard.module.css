@@ -97,6 +97,54 @@
   font-size: 0.92rem;
 }
 
+.sharedUsers {
+  grid-column: 1 / -1;
+  padding-top: 16px;
+  border-top: 1px solid #1e3a5f;
+}
+
+.sharedUsers h2 {
+  margin: 0 0 10px;
+  color: #f5a623;
+  font-size: 0.95rem;
+}
+
+.sharedUsers p {
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.sharedUsers ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sharedUsers li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #1e3a5f;
+  border-radius: 9px;
+  overflow-wrap: anywhere;
+}
+
+.sharedUsers li span {
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.readOnlyNotice {
+  grid-column: 1 / -1;
+  color: #fbbf24;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 760px) {
   .workspace,
   .projectControls {

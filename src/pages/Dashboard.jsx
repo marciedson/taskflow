@@ -46,6 +46,7 @@ export default function Home() {
   const { token, usuario } = useContext(AuthContext);
   const [tarefas, setTarefas] = useState([]);
   const [projetos, setProjetos] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
   const [projetoSelecionadoId, setProjetoSelecionadoId] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
@@ -59,17 +60,22 @@ export default function Home() {
 
   useEffect(() => {
     let ativo = true;
-    Promise.all([api.get("/projetos"), api.get("/tarefas")])
-      .then(([{ data: projetosCarregados }, { data: tarefasCarregadas }]) => {
+    Promise.all([api.get("/projetos"), api.get("/tarefas"), api.get("/usuarios")])
+      .then(([{ data: projetosCarregados }, { data: tarefasCarregadas }, { data: usuariosCarregados }]) => {
         if (!ativo) return;
-        if (!Array.isArray(projetosCarregados) || !Array.isArray(tarefasCarregadas)) {
-          throw new Error("A API retornou um formato inesperado para projetos ou tarefas.");
+        if (
+          !Array.isArray(projetosCarregados) ||
+          !Array.isArray(tarefasCarregadas) ||
+          !Array.isArray(usuariosCarregados)
+        ) {
+          throw new Error("A API retornou um formato inesperado para os dados compartilhados.");
         }
 
         setErro("");
         setProjetos(projetosCarregados);
-        setProjetoSelecionadoId(projetosCarregados[0] ? String(projetosCarregados[0].id) : "");
+        setProjetoSelecionadoId("todos");
         setTarefas(tarefasCarregadas.map(converterTarefa));
+        setUsuarios(usuariosCarregados);
       })
       .catch((error) => {
         if (ativo) {
@@ -86,7 +92,7 @@ export default function Home() {
     return () => {
       ativo = false;
     };
-  }, [token]);
+  }, [token, usuario?.id]);
 
   const abrirCriar = () => {
     setEditingTask(null);
@@ -145,8 +151,8 @@ export default function Home() {
           current.map((tarefa) => tarefa.id === tarefaAtualizada.id ? tarefaAtualizada : tarefa)
         );
       } else {
-        if (!projetoSelecionadoId) {
-          setErro("Crie ou selecione um projeto antes de adicionar tarefas.");
+        if (!projetoSelecionadoId || projetoSelecionadoId === "todos" || !podeAdicionarTarefa) {
+          setErro("Selecione um projeto seu antes de adicionar tarefas.");
           return;
         }
 
@@ -218,9 +224,14 @@ export default function Home() {
     }
   };
 
-  const tarefasDoProjeto = tarefas.filter(
-    (tarefa) => String(tarefa.projetoId) === projetoSelecionadoId
+  const tarefasDoProjeto = projetoSelecionadoId === "todos"
+    ? tarefas
+    : tarefas.filter((tarefa) => String(tarefa.projetoId) === projetoSelecionadoId);
+  const projetoSelecionado = projetos.find(
+    (projeto) => String(projeto.id) === projetoSelecionadoId
   );
+  const podeAdicionarTarefa =
+    Number(projetoSelecionado?.usuarioId) === Number(usuario?.id);
 
   return (
     <>
@@ -242,15 +253,17 @@ export default function Home() {
                 onChange={(event) => setProjetoSelecionadoId(event.target.value)}
                 disabled={carregando || projetos.length === 0}
               >
-                {projetos.length === 0 ? (
+                {projetos.length === 0 && (
                   <option value="">Nenhum projeto cadastrado</option>
-                ) : (
-                  projetos.map((projeto) => (
-                    <option key={projeto.id} value={String(projeto.id)}>
-                      {projeto.nome}
-                    </option>
-                  ))
                 )}
+                {projetos.length > 0 && (
+                  <option value="todos">Todos os projetos</option>
+                )}
+                {projetos.map((projeto) => (
+                  <option key={projeto.id} value={String(projeto.id)}>
+                    {projeto.nome} — {projeto.usuarioNome}
+                  </option>
+                ))}
               </select>
             </label>
             <form className={styles.newProjectForm} onSubmit={criarProjeto}>
@@ -272,6 +285,33 @@ export default function Home() {
               </button>
             </form>
           </div>
+          <div className={styles.sharedUsers}>
+            <h2>Usuários</h2>
+            {usuarios.length === 0 ? (
+              <p>Nenhuma conta cadastrada.</p>
+            ) : (
+              <ul>
+                {usuarios.map((conta) => (
+                  <li key={conta.id}>
+                    <strong>{conta.nome}</strong>
+                    <span>{conta.email}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {projetoSelecionado && !podeAdicionarTarefa && (
+            <p className={styles.readOnlyNotice}>
+              Projeto compartilhado de {projetoSelecionado.usuarioNome}; apenas o dono
+              pode adicionar tarefas nele.
+            </p>
+          )}
+          {projetoSelecionadoId === "todos" && projetos.length > 0 && (
+            <p className={styles.readOnlyNotice}>
+              Todos os projetos e tarefas estão visíveis. Selecione um projeto seu para
+              adicionar tarefas.
+            </p>
+          )}
           {projetos.length === 0 && !carregando && (
             <p className={styles.emptyProjects}>
               Crie um projeto para começar a salvar suas tarefas no banco de dados.
@@ -280,7 +320,8 @@ export default function Home() {
         </section>
         <Kanban
           tarefas={tarefasDoProjeto}
-          adicionarDesabilitado={!projetoSelecionadoId || carregando}
+          adicionarDesabilitado={!projetoSelecionadoId || carregando || !podeAdicionarTarefa}
+          usuarioId={usuario?.id}
           onAdicionar={abrirCriar}
           onDeletar={deletarTarefa}
           onConcluir={alternarConcluida}
