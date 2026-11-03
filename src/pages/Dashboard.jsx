@@ -6,6 +6,7 @@ import modalStyles from "../Componentes/ModalTarefa.module.css";
 import { useContext, useEffect, useState } from "react";
 import { AuthContext } from "../Componentes/contexts/AuthContext";
 import api from "../api";
+import styles from "./Dashboard.module.css";
 
 const STATUS_PARA_COLUNA = {
   pending: "afazer",
@@ -27,20 +28,29 @@ function converterTarefa(tarefa) {
     texto: tarefa.titulo,
     status,
     concluida: status === "done",
+    projetoNome: tarefa.projeto,
+    usuarioNome: tarefa.usuario,
   };
 }
 
 function obterMensagemErro(error, mensagemPadrao) {
   const erros = error.response?.data?.erros;
   if (Array.isArray(erros)) return erros.join(". ");
-  return error.response?.data?.erro || error.response?.data?.mensagem || mensagemPadrao;
+  return error.response?.data?.erro ||
+    error.response?.data?.mensagem ||
+    error.message ||
+    mensagemPadrao;
 }
 
 export default function Home() {
-  const { token } = useContext(AuthContext);
+  const { token, usuario } = useContext(AuthContext);
   const [tarefas, setTarefas] = useState([]);
+  const [projetos, setProjetos] = useState([]);
+  const [projetoSelecionadoId, setProjetoSelecionadoId] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState("");
+  const [nomeNovoProjeto, setNomeNovoProjeto] = useState("");
+  const [criandoProjeto, setCriandoProjeto] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
   const [tarefaParaExcluir, setTarefaParaExcluir] = useState(null);
@@ -49,23 +59,24 @@ export default function Home() {
 
   useEffect(() => {
     let ativo = true;
-    Promise.resolve().then(() => {
-      if (ativo) {
-        setCarregando(true);
-        setErro("");
-        setTarefas([]);
-      }
-    });
-
-    api.get("/tarefas")
-      .then(({ data }) => {
-        if (ativo) {
-          setTarefas(data.map(converterTarefa));
+    Promise.all([api.get("/projetos"), api.get("/tarefas")])
+      .then(([{ data: projetosCarregados }, { data: tarefasCarregadas }]) => {
+        if (!ativo) return;
+        if (!Array.isArray(projetosCarregados) || !Array.isArray(tarefasCarregadas)) {
+          throw new Error("A API retornou um formato inesperado para projetos ou tarefas.");
         }
+
+        setErro("");
+        setProjetos(projetosCarregados);
+        setProjetoSelecionadoId(projetosCarregados[0] ? String(projetosCarregados[0].id) : "");
+        setTarefas(tarefasCarregadas.map(converterTarefa));
       })
       .catch((error) => {
         if (ativo) {
-          setErro(obterMensagemErro(error, "Não foi possível carregar suas tarefas."));
+          setErro(obterMensagemErro(
+            error,
+            "Não foi possível carregar seus projetos e tarefas."
+          ));
         }
       })
       .finally(() => {
@@ -92,6 +103,26 @@ export default function Home() {
     setEditingTask(null);
   };
 
+  const criarProjeto = async (event) => {
+    event.preventDefault();
+    const nome = nomeNovoProjeto.trim();
+    if (!nome || criandoProjeto) return;
+
+    setErro("");
+    setCriandoProjeto(true);
+    try {
+      const { data } = await api.post("/projetos", { nome });
+      const projeto = data.projeto;
+      setProjetos((current) => [...current, projeto]);
+      setProjetoSelecionadoId(String(projeto.id));
+      setNomeNovoProjeto("");
+    } catch (error) {
+      setErro(obterMensagemErro(error, "Não foi possível criar o projeto."));
+    } finally {
+      setCriandoProjeto(false);
+    }
+  };
+
   const handleSave = async (taskData) => {
     setErro("");
     const coluna = STATUS_PARA_COLUNA[taskData.status] ||
@@ -114,18 +145,17 @@ export default function Home() {
           current.map((tarefa) => tarefa.id === tarefaAtualizada.id ? tarefaAtualizada : tarefa)
         );
       } else {
-        const tarefaDoProjeto = tarefas.find((tarefa) => tarefa.projetoId);
-        if (!tarefaDoProjeto) {
-          setErro("Não há um projeto associado às tarefas para vincular uma nova tarefa.");
+        if (!projetoSelecionadoId) {
+          setErro("Crie ou selecione um projeto antes de adicionar tarefas.");
           return;
         }
 
         const ordem = tarefas
-          .filter((tarefa) => tarefa.projetoId === tarefaDoProjeto.projetoId)
+          .filter((tarefa) => String(tarefa.projetoId) === projetoSelecionadoId)
           .reduce((maiorOrdem, tarefa) => Math.max(maiorOrdem, Number(tarefa.ordem) || 0), 0) + 1;
         const { data } = await api.post("/tarefas", {
           ...payload,
-          projetoId: tarefaDoProjeto.projetoId,
+          projetoId: Number(projetoSelecionadoId),
           ordem,
         });
         setTarefas((current) => [...current, converterTarefa(data.tarefa)]);
@@ -188,14 +218,69 @@ export default function Home() {
     }
   };
 
+  const tarefasDoProjeto = tarefas.filter(
+    (tarefa) => String(tarefa.projetoId) === projetoSelecionadoId
+  );
+
   return (
     <>
       <Header titulo=" TaskFlow " subtitulo="Gerencie suas tarefas" />
       <main className="container">
         {carregando && <p role="status">Carregando tarefas...</p>}
         {erro && tarefaParaExcluir === null && <p role="alert">{erro}</p>}
+        <section className={styles.workspace} aria-label="Projetos e conta">
+          <div className={styles.account}>
+            <span className={styles.accountLabel}>Conta conectada</span>
+            <strong>{usuario?.nome || "Usuário"}</strong>
+            {usuario?.email && <span>{usuario.email}</span>}
+          </div>
+          <div className={styles.projectControls}>
+            <label className={styles.projectField}>
+              <span>Projeto ativo</span>
+              <select
+                value={projetoSelecionadoId}
+                onChange={(event) => setProjetoSelecionadoId(event.target.value)}
+                disabled={carregando || projetos.length === 0}
+              >
+                {projetos.length === 0 ? (
+                  <option value="">Nenhum projeto cadastrado</option>
+                ) : (
+                  projetos.map((projeto) => (
+                    <option key={projeto.id} value={String(projeto.id)}>
+                      {projeto.nome}
+                    </option>
+                  ))
+                )}
+              </select>
+            </label>
+            <form className={styles.newProjectForm} onSubmit={criarProjeto}>
+              <label className={styles.projectField} htmlFor="novo-projeto">
+                <span>Novo projeto</span>
+                <input
+                  id="novo-projeto"
+                  value={nomeNovoProjeto}
+                  onChange={(event) => setNomeNovoProjeto(event.target.value)}
+                  placeholder="Nome do projeto"
+                  maxLength={100}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={!nomeNovoProjeto.trim() || criandoProjeto}
+              >
+                {criandoProjeto ? "Criando..." : "Criar projeto"}
+              </button>
+            </form>
+          </div>
+          {projetos.length === 0 && !carregando && (
+            <p className={styles.emptyProjects}>
+              Crie um projeto para começar a salvar suas tarefas no banco de dados.
+            </p>
+          )}
+        </section>
         <Kanban
-          tarefas={tarefas}
+          tarefas={tarefasDoProjeto}
+          adicionarDesabilitado={!projetoSelecionadoId || carregando}
           onAdicionar={abrirCriar}
           onDeletar={deletarTarefa}
           onConcluir={alternarConcluida}

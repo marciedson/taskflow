@@ -4,6 +4,7 @@ import styles from './TarefaItem.module.css';
 
 export default function Kanban({
   tarefas = [],
+  adicionarDesabilitado = false,
   onAdicionar,
   onDeletar,
   onConcluir,
@@ -53,7 +54,12 @@ export default function Kanban({
       <div className={styles.kanbanHeader}>
         <h2>Minhas tarefas</h2>
         <p>Organize suas atividades por etapa.</p>
-        <button type="button" className={styles.actionButton} onClick={onAdicionar}>
+        <button
+          type="button"
+          className={styles.actionButton}
+          onClick={onAdicionar}
+          disabled={adicionarDesabilitado}
+        >
           Adicionar tarefa
         </button>
       </div>
